@@ -27,7 +27,9 @@
 #include <qgsproviderregistry.h>
 #include <qgsvectordataprovider.h>
 #include <qgsvectorlayer.h>
-
+#include <qgsmapcanvas.h>
+#include <qgsproject.h>
+#include <qgsproviderregistry.h>
 
 MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags fl)
     : QMainWindow(parent,fl)
@@ -39,22 +41,18 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags fl)
 #if defined(Q_WS_MAC)
   QString myPluginsDir        = "/Users/timsutton/apps/qgis.app/Contents/MacOS/lib/qgis";
 #else
-  QString myPluginsDir        = "/usr/lib/qgis";
+  QString myPluginsDir        = "/usr/lib/qgis/plugins";
 #endif
   QgsProviderRegistry::instance(myPluginsDir);
 
-  addLayer();
-}
-
-MainWindow::~MainWindow()
-{
-}
-
-void MainWindow::addLayer()
-{
   QString myLayerPath         = "/home/thomasg/ne_10m_admin_0_countries.shp";
   QString myLayerBaseName     = "Countries";
   QString myProviderName      = "ogr";
+
+  QgsMapCanvas *mpMapCanvas= new QgsMapCanvas();
+  mpMapCanvas->enableAntiAliasing(true);
+  mpMapCanvas->setCanvasColor(QColor(255, 255, 255));
+  mpMapCanvas->freeze(false);
 
   QgsVectorLayer * mypLayer = new QgsVectorLayer(myLayerPath, myLayerBaseName, myProviderName);
 
@@ -67,57 +65,43 @@ void MainWindow::addLayer()
     qDebug("Layer is NOT valid");
     return;
   }
+  QString csvPath = "/home/thomasg/git/QGIS-Code-Examples/6_accessing_vector_attributes/data/countries.csv";
+  QString csvProviderString = QString("file://") + csvPath + QString("?type=csv&encoding=UTF-8&useHeader=Yes&xField=longitude&yField=latitude&geomType=point&subsetIndex=no&watchFile=no");
+  QgsVectorLayer * csvLayer = new QgsVectorLayer( csvProviderString, "vl", "delimitedtext" );
 
-  //get the field list associated with the layer
-  QList<QgsField> myFields = mypLayer->fields().toList();
-  //we will hold the list of attributes in this string
-  QString myString;
-  //print out the field names first
-  for (int i = 0; i < myFields.size(); i++ )
+  qDebug(QgsProviderRegistry::instance()->providerList().join(",").toUtf8().constData());
+
+  if (csvLayer->isValid())
   {
-    //a little logic so we can produce output like : 
-    // "foo","bar","etc"
-    if (i==0)
-    {
-      // here is where we actually get the field value
-      myString = "\"" +  myFields[i].name().trimmed() + "\"";
-    }
-    else
-    {
-      myString += ",\"" +  myFields[i].name().trimmed() + "\"";
-    }
+    qDebug("CSV Layer is valid");
   }
-  textBrowser->append("Field List: " + myString);
-  //get the provider associated with the layer
-  //the provider handles data io and is a plugin in qgis.
-  QgsVectorDataProvider *mypProvider=mypLayer->dataProvider();
-  //check the provider is valid
-  QgsFeatureIterator fi = mypProvider->getFeatures();
-
-  //create a holder for retrieving features from the provider
-  QgsFeature mypFeature;
-  while ( fi.nextFeature( mypFeature ) )
+  else
   {
-
-    //get the attributes of this feature
-    QVector<QVariant> myAttributes = mypFeature.attributes();
-    //now loop through the attributes
-    for (int i = 0; i < myAttributes.count(); i++)
-    {
-      QString val = myAttributes[i].toString().trimmed();
-      // qDebug("%s", val.trimmed().toUtf8().constData());
-      //a little logic so we can produce output like : 
-      // "foo","bar","etc"
-      if (i==0)
-      {
-        // here is where we actually get the field value
-        myString = "\"" + val + "\"";
-      }
-      else
-      {
-        myString += ",\"" + val + "\"";
-      }
-    }
-    textBrowser->append("Field Values: \n" + myString);
+    qDebug("CSV Layer is NOT valid");
+    return;
   }
+
+  //create a layerset
+  QList <QgsMapLayer *> layers;
+
+  layers.append(csvLayer);
+  QgsProject::instance()->addMapLayer(csvLayer, true);
+
+  // Add the layers to the Layer Set
+  layers.append(mypLayer);//bool visibility
+  // set the canvas to the extent of our layer
+  mpMapCanvas->setExtent(mypLayer->extent());
+  // Add the Vector Layer to the Layer Registry
+  QgsProject::instance()->addMapLayer(mypLayer, true);
+
+
+
+  // Set the Map Canvas Layer Set
+  mpMapCanvas->setLayers(layers);
+  /*mpMapCanvas->show();*/
+  this->setCentralWidget(mpMapCanvas);
+}
+
+MainWindow::~MainWindow()
+{
 }

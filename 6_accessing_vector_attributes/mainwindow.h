@@ -36,8 +36,6 @@ class MainWindow : public QMainWindow, private Ui::MainWindowBase
       MainWindow(QWidget* parent = 0, Qt::WindowFlags fl = 0 );
       ~MainWindow();
     public slots:
-      void addLayer();
-      
     private:
 };
 
